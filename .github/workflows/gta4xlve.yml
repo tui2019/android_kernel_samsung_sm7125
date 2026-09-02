@@ -11,9 +11,6 @@ on:
         required: true
         default: "True"
 
-  push:
-    branches: [ "oneui/android16", "main", "master", "copilot/**" ]
-
 jobs:
   build:
     name: Build Kernel (LineageOS Logic)
