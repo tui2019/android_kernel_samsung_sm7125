@@ -80,51 +80,6 @@ jobs:
           echo "✓ KernelSU-Next setup complete"
           echo "=========================================="
 
-      - name: Setup AnyKernel3
-        run: |
-          git clone --depth=1 https://github.com/AlfCraft07/AnyKernel3.git ~/AnyKernel3
-          cd ~/AnyKernel3
-          cat > anykernel.sh << 'EOF'
-          #!/sbin/sh
-          # AnyKernel3 Script for GTA4XLVE
-          
-          ## AnyKernel setup
-          # begin properties
-          properties() { '
-          kernel.string=Legion Kernel for atoll platform - Built for gta4xlveu (SM-P613/SM-P619)
-          do.devicecheck=0
-          do.modules=0
-          do.systemless=1
-          do.cleanup=1
-          do.cleanuponabort=0
-          device.name1=gta4xlve
-          device.name2=gta4xl
-          device.name3=SM-P613
-          device.name4=gta4xlveu
-          device.name5=SM-P619
-          supported.versions=11-16
-          supported.patchlevels=
-          '; } # end properties
-          
-          ## AnyKernel boot install
-          # begin attributes
-          block=/dev/block/bootdevice/by-name/boot;
-          is_slot_device=0;
-          ramdisk_compression=auto;
-          patch_vbmeta_flag=auto;
-          boot_img_hdr_ver=2
-          # end attributes
-          
-          ## AnyKernel methods (DO NOT CHANGE)
-          . tools/ak3-core.sh;
-          
-          ## AnyKernel boot install
-          split_boot;
-          flash_boot;
-          ## end boot install
-          EOF
-          chmod +x anykernel.sh
-
       # -----------------------------------------------------------------------
       # BUILD LOGIC: Extracted directly from LineageOS kernel.mk
       # -----------------------------------------------------------------------
@@ -164,16 +119,13 @@ jobs:
           fi
 
       # -----------------------------------------------------------------------
-      # PACKAGING: AnyKernel3 & Kernel Artifacts
+      # PACKAGING: Pure Kernel Artifacts (Image.gz & dtbo.img)
       # -----------------------------------------------------------------------
-      - name: Create Flashable ZIP & Prepare Artifacts
+      - name: Prepare Kernel Artifacts
         run: |
           mkdir -p $GITHUB_WORKSPACE/artifacts
-          cd ~/AnyKernel3
-          rm -rf .git* README.md
           
           if [ -f $GITHUB_WORKSPACE/out/arch/arm64/boot/Image.gz ]; then
-             cp $GITHUB_WORKSPACE/out/arch/arm64/boot/Image.gz .
              cp $GITHUB_WORKSPACE/out/arch/arm64/boot/Image.gz $GITHUB_WORKSPACE/artifacts/Image.gz
              echo "✓ Copied Image.gz"
           else
@@ -182,15 +134,12 @@ jobs:
           fi
 
           if [ -f $GITHUB_WORKSPACE/out/arch/arm64/boot/dtbo.img ]; then
-             cp $GITHUB_WORKSPACE/out/arch/arm64/boot/dtbo.img .
              cp $GITHUB_WORKSPACE/out/arch/arm64/boot/dtbo.img $GITHUB_WORKSPACE/artifacts/dtbo.img
              echo "✓ Copied dtbo.img"
           fi
-          
-          ZIPNAME="legion-gta4xlve-$(date +%Y%m%d).zip"
-          zip -r9 $GITHUB_WORKSPACE/artifacts/$ZIPNAME *
-          echo "✓ Created $ZIPNAME"
-          echo "ZIPNAME=$ZIPNAME" >> $GITHUB_ENV
+
+          echo "Artifacts ready:"
+          ls -lah $GITHUB_WORKSPACE/artifacts
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
