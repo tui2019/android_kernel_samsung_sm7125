@@ -104,9 +104,9 @@ jobs:
           make O=out olddefconfig
 
           echo "--> Building kernel..."
-          echo "--> Compiling Image.gz and dtbo.img..."
+          echo "--> Compiling Image.gz..."
           set -o pipefail
-          make O=out -j$(nproc) Image.gz dtbo.img 2>&1 | tee build.log || make O=out -j$(nproc) Image.gz 2>&1 | tee build.log
+          make O=out -j$(nproc) Image.gz 2>&1 | tee build.log
           BUILD_STATUS=$?
           
           if [ $BUILD_STATUS -ne 0 ]; then
@@ -116,7 +116,7 @@ jobs:
           fi
 
       # -----------------------------------------------------------------------
-      # PACKAGING: Pure Kernel Artifacts (Image.gz & dtbo.img)
+      # PACKAGING: Pure Kernel Artifacts (Image.gz)
       # -----------------------------------------------------------------------
       - name: Prepare Kernel Artifacts
         run: |
@@ -126,13 +126,8 @@ jobs:
              cp $GITHUB_WORKSPACE/out/arch/arm64/boot/Image.gz $GITHUB_WORKSPACE/artifacts/Image.gz
              echo "✓ Copied Image.gz"
           else
-             echo "Build Failed: Image.gz not found"
-             exit 1
-          fi
-
-          if [ -f $GITHUB_WORKSPACE/out/arch/arm64/boot/dtbo.img ]; then
-             cp $GITHUB_WORKSPACE/out/arch/arm64/boot/dtbo.img $GITHUB_WORKSPACE/artifacts/dtbo.img
-             echo "✓ Copied dtbo.img"
+            echo "Build Failed: Image.gz not found"
+            exit 1
           fi
 
           echo "Artifacts ready:"
