@@ -7,6 +7,10 @@ on:
         description: "Trigger QuantumROM build upon completion? (True/False)"
         required: false
         default: "True"
+      PUBLISH_RELEASE:
+        description: "Publish official release to SourceForge & update OTA? (True/False)"
+        required: false
+        default: "True"
   repository_dispatch:
     types: [build-kernel]
 
@@ -285,6 +289,13 @@ jobs:
         env:
           GIT_TOKEN: ${{ secrets.GIT_TOKEN || secrets.GH_TOKEN }}
           TRIGGER_ROM: ${{ github.event.inputs.TRIGGER_ROM || github.event.client_payload.trigger_rom || 'true' }}
+          STOCK_DEVICE: ${{ github.event.client_payload.stock_device || 'SM-P613' }}
+          TARGET_DEVICE: ${{ github.event.client_payload.target_device || 'SM-P620' }}
+          TARGET_CSC: ${{ github.event.client_payload.target_csc || 'EUX' }}
+          OUTPUT_FS: ${{ github.event.client_payload.output_fs || 'erofs' }}
+          VENDOR_REPO: ${{ github.event.client_payload.vendor_repo || 'tui2019/vendor_samsung_gta4xlve' }}
+          KERNEL_REPO: ${{ github.event.client_payload.kernel_repo || 'tui2019/android_kernel_samsung_sm7125' }}
+          PUBLISH_RELEASE: ${{ github.event.inputs.PUBLISH_RELEASE || github.event.client_payload.publish_release || 'True' }}
         run: |
           if [ "$TRIGGER_ROM" = "true" ] || [ "$TRIGGER_ROM" = "True" ]; then
             if [ -n "$GIT_TOKEN" ]; then
@@ -293,15 +304,18 @@ jobs:
                 -H "Accept: application/vnd.github+json" \
                 -H "Authorization: token $GIT_TOKEN" \
                 "https://api.github.com/repos/tui2019/QuantumROM/dispatches" \
-                -d '{
-                  "event_type": "kernel-build-completed",
-                  "client_payload": {
-                    "stock_device": "SM-P613",
-                    "target_device": "SM-P620",
-                    "target_csc": "EUX",
-                    "output_fs": "erofs"
+                -d "{
+                  \"event_type\": \"kernel-build-completed\",
+                  \"client_payload\": {
+                    \"stock_device\": \"$STOCK_DEVICE\",
+                    \"target_device\": \"$TARGET_DEVICE\",
+                    \"target_csc\": \"$TARGET_CSC\",
+                    \"output_fs\": \"$OUTPUT_FS\",
+                    \"vendor_repo\": \"$VENDOR_REPO\",
+                    \"kernel_repo\": \"$KERNEL_REPO\",
+                    \"publish_release\": \"$PUBLISH_RELEASE\"
                   }
-                }')
+                }")
               echo "HTTP Code: $HTTP_CODE"
             fi
           fi
