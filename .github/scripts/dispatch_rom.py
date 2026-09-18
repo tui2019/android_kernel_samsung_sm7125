@@ -28,9 +28,27 @@ input_pub = os.environ.get("INPUT_PUBLISH_RELEASE")
 if input_pub:
     payload["publish_release"] = input_pub
 
+# Enforce GitHub API limit of at most 10 top-level properties
+allowed_top = {
+    "trigger_rom", "stock_device", "target_device", "target_csc",
+    "output_fs", "vendor_repo", "kernel_repo", "publish_release", "rom_config"
+}
+rom_config = payload.get("rom_config", {})
+if not isinstance(rom_config, dict):
+    rom_config = {}
+
+compact_payload = {}
+for k, v in payload.items():
+    if k in allowed_top and k != "rom_config":
+        compact_payload[k] = v
+    elif k != "rom_config":
+        rom_config[k] = v
+
+compact_payload["rom_config"] = rom_config
+
 body = json.dumps({
     "event_type": "kernel-build-completed",
-    "client_payload": payload
+    "client_payload": compact_payload
 }).encode('utf-8')
 
 req = urllib.request.Request(
