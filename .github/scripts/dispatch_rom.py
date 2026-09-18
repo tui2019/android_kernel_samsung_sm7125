@@ -12,7 +12,7 @@ payload = {
     "output_fs": "erofs",
     "vendor_repo": "tui2019/vendor_samsung_gta4xlve",
     "kernel_repo": "tui2019/android_kernel_samsung_sm7125",
-    "publish_release": "True"
+    "publish_release": "False"
 }
 
 event_payload_str = os.environ.get("EVENT_PAYLOAD", "")

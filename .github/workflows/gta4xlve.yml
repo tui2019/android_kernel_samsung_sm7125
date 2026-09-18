@@ -10,7 +10,7 @@ on:
       PUBLISH_RELEASE:
         description: "Publish official release to SourceForge & update OTA? (True/False)"
         required: false
-        default: "True"
+        default: "False"
   repository_dispatch:
     types: [build-kernel]
 
