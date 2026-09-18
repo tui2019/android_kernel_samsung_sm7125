@@ -2,8 +2,18 @@ name: Galaxy Tab S6 Lite 2022 Wi-Fi & LTE (SM-P613/SM-P619) Build
 
 on:
   workflow_dispatch:
+    inputs:
+      TRIGGER_ROM:
+        description: "Trigger QuantumROM build upon completion? (True/False)"
+        required: false
+        default: "True"
+  repository_dispatch:
+    types: [build-kernel]
   push:
-    branches: [ "main", "master", "copilot/**" ]
+    branches: [ "oneui/android16" ]
+    paths-ignore:
+      - '.github/**'
+      - 'README.md'
 
 jobs:
   build:
@@ -17,7 +27,25 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
-          fetch-depth: 1
+          fetch-depth: 0
+
+      - name: Check and Merge Upstream Updates
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git remote add upstream https://github.com/AlfCraft07/android_kernel_samsung_sm7125.git || true
+          git fetch upstream oneui/android16
+
+          UPSTREAM_COMMIT=$(git rev-parse upstream/oneui/android16)
+          echo "Upstream oneui/android16 is at $UPSTREAM_COMMIT"
+
+          if ! git merge-base --is-ancestor upstream/oneui/android16 HEAD; then
+            echo "Upstream has new changes! Merging upstream/oneui/android16..."
+            git merge upstream/oneui/android16 --no-edit -m "ci: sync upstream updates from AlfCraft07"
+            git push origin HEAD:oneui/android16 || echo "Notice: Push to origin skipped or not permitted."
+          else
+            echo "Local branch is already up to date with upstream."
+          fi
 
       # -----------------------------------------------------------------------
       # CACHING: Saves time by not re-downloading Clang every run
@@ -244,6 +272,44 @@ jobs:
         with:
           name: gta4xlve
           path: ${{ env.ZIPNAME }}
+
+      - name: Publish AnyKernel Release
+        uses: softprops/action-gh-release@v2
+        if: success()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: kernel-latest
+          name: "GTA4XLVE AnyKernel3 Latest"
+          files: ${{ env.ZIPNAME }}
+          draft: false
+          prerelease: false
+
+      - name: Trigger QuantumROM Build
+        if: success()
+        env:
+          GIT_TOKEN: ${{ secrets.GIT_TOKEN || secrets.GH_TOKEN }}
+          TRIGGER_ROM: ${{ github.event.inputs.TRIGGER_ROM || github.event.client_payload.trigger_rom || 'true' }}
+        run: |
+          if [ "$TRIGGER_ROM" = "true" ] || [ "$TRIGGER_ROM" = "True" ]; then
+            if [ -n "$GIT_TOKEN" ]; then
+              echo "🚀 Dispatching event to QuantumROM repository..."
+              HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+                -H "Accept: application/vnd.github+json" \
+                -H "Authorization: token $GIT_TOKEN" \
+                "https://api.github.com/repos/tui2019/QuantumROM/dispatches" \
+                -d '{
+                  "event_type": "kernel-build-completed",
+                  "client_payload": {
+                    "stock_device": "SM-P613",
+                    "target_device": "SM-P620",
+                    "target_csc": "EUX",
+                    "output_fs": "erofs"
+                  }
+                }')
+              echo "HTTP Code: $HTTP_CODE"
+            fi
+          fi
 
       - name: Upload Build Log (Debug)
         if: always()
