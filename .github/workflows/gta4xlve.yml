@@ -9,11 +9,6 @@ on:
         default: "True"
   repository_dispatch:
     types: [build-kernel]
-  push:
-    branches: [ "oneui/android16" ]
-    paths-ignore:
-      - '.github/**'
-      - 'README.md'
 
 jobs:
   build:
@@ -41,7 +36,7 @@ jobs:
 
           if ! git merge-base --is-ancestor upstream/oneui/android16 HEAD; then
             echo "Upstream has new changes! Merging upstream/oneui/android16..."
-            git merge upstream/oneui/android16 --no-edit -m "ci: sync upstream updates from AlfCraft07"
+            git merge upstream/oneui/android16 --no-edit -m "ci: sync upstream updates from AlfCraft07 [skip ci]"
             git push origin HEAD:oneui/android16 || echo "Notice: Push to origin skipped or not permitted."
           else
             echo "Local branch is already up to date with upstream."
