@@ -41,10 +41,19 @@ jobs:
           if ! git merge-base --is-ancestor upstream/oneui/android16 HEAD; then
             echo "Upstream has new changes! Merging upstream/oneui/android16..."
             git merge upstream/oneui/android16 --no-edit -m "ci: sync upstream updates from AlfCraft07 [skip ci]"
-            git push origin HEAD:oneui/android16 || echo "Notice: Push to origin skipped or not permitted."
+            # NOTE: the default GITHUB_TOKEN (contents: write) cannot push changes
+            # to .github/workflows/*.yml. If upstream touches workflow files, this
+            # push will be rejected. Set the SYNC_PUSH_TOKEN secret to a fine-grained
+            # PAT with "Contents: write" + "Workflows: write" on this repo to allow it.
+            # This step now fails the job on a rejected push instead of hiding it,
+            # so "sync succeeded" in the UI actually means the push landed.
+            git push "https://x-access-token:${SYNC_PUSH_TOKEN:-$GITHUB_TOKEN}@github.com/${{ github.repository }}.git" HEAD:oneui/android16
           else
             echo "Local branch is already up to date with upstream."
           fi
+        env:
+          SYNC_PUSH_TOKEN: ${{ secrets.SYNC_PUSH_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # -----------------------------------------------------------------------
       # CACHING: Saves time by not re-downloading Clang every run
@@ -85,15 +94,52 @@ jobs:
           # Download and run KernelSU-Next legacy setup script
           curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/legacy/kernel/setup.sh" | bash -s legacy
           
-          # Fix timespec64 pointer mismatch in sulog/event.c for 4.14 kernels
-          python3 -c "p = 'KernelSU-Next/kernel/sulog/event.c'; content = open(p).read(); open(p, 'w').write(content.replace('get_monotonic_boottime(&ts)', 'ktime_get_boottime_ts64(&ts)'))"
-          
-          # Fix undefined ksu_input_hook symbol in ksud_integration.c for kprobes mode
-          python3 -c "p = 'KernelSU-Next/kernel/runtime/ksud_integration.c'; content = open(p).read(); open(p, 'w').write(content.replace('static struct work_struct __maybe_unused stop_input_hook_work;', 'static struct work_struct __maybe_unused stop_input_hook_work;\nbool ksu_input_hook __read_mostly = true;'))"
-          
-          # Fix NULL pointer dereference in ksu_handle_execve_sucompat
-          python3 -c "p = 'KernelSU-Next/kernel/feature/sucompat.c'; content = open(p).read(); open(p, 'w').write(content.replace('const char __user *const __user *argv_user = (const char __user *const __user *)PT_REGS_PARM2(regs);', 'const char __user *const __user *argv_user = regs ? (const char __user *const __user *)PT_REGS_PARM2(regs) : NULL;'))"
-          python3 -c "p = 'KernelSU-Next/kernel/hook/hook_manager.c'; content = open(p).read(); open(p, 'w').write(content.replace('ksu_handle_execve_sucompat(filename_user, NULL, NULL);', 'ksu_handle_execve_sucompat(filename_user, id, regs);'))"
+          # --------------------------------------------------------------
+          # Compatibility patches applied on top of the freshly-pulled,
+          # unpinned KernelSU-Next `legacy` source. Each patch is idempotent:
+          # it only rewrites the file if its target string is still present,
+          # and hard-fails the build if not, instead of silently no-op'ing
+          # (previous no-op behavior is exactly how the sucompat.c/
+          # hook_manager.c patches went stale and unnoticed).
+          # --------------------------------------------------------------
+          python3 - <<'PYEOF'
+          import sys
+
+          def patch(path, old, new, label):
+              with open(path) as f:
+                  content = f.read()
+              if old not in content:
+                  print(f"::error::[{label}] target string not found in {path} - "
+                        f"KernelSU-Next source has changed upstream, patch needs review")
+                  sys.exit(1)
+              with open(path, "w") as f:
+                  f.write(content.replace(old, new))
+              print(f"[{label}] applied to {path}")
+
+          # This vendor's 4.14.357 tree only exposes ktime_get_boottime_ts64()/
+          # get_monotonic_boottime64(); it does NOT define the plain
+          # get_monotonic_boottime() that KernelSU-Next's own
+          # "#if KERNEL_VERSION(4,19,0) <= LINUX_VERSION_CODE" check falls back
+          # to on pre-4.19-numbered kernels. Force the modern call unconditionally.
+          patch(
+              "KernelSU-Next/kernel/sulog/event.c",
+              "get_monotonic_boottime(&ts)",
+              "ktime_get_boottime_ts64(&ts)",
+              "event.c timespec64",
+          )
+
+          # NOTE: the ksu_input_hook injection patch (ksud_integration.c) and the
+          # sucompat.c / hook_manager.c NULL-guard patches have been removed.
+          # As of KernelSU-Next commit f6a1570c ("legacy: non-GKI update..."),
+          # ksu_input_hook is already defined unconditionally in every hook mode,
+          # so re-injecting it causes "redefinition of 'ksu_input_hook'". The
+          # sucompat.c/hook_manager.c patches targeted call shapes that no longer
+          # exist after that same refactor (functions were restructured), so they
+          # had already become silent no-ops. If a future upstream change
+          # reintroduces the need for any of these, the idempotent `patch()`
+          # helper above will fail loudly rather than silently doing nothing or
+          # silently duplicating a definition - add it back here if that happens.
+          PYEOF
           
           echo "=========================================="
           echo "✓ KernelSU-Next setup complete"
