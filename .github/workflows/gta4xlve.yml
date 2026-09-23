@@ -28,6 +28,11 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
+      - name: Debug token length (temporary)
+        run: echo "SYNC_PUSH_TOKEN length is ${#SYNC_PUSH_TOKEN}"
+        env:
+          SYNC_PUSH_TOKEN: ${{ secrets.SYNC_PUSH_TOKEN }}
+
       - name: Check and Merge Upstream Updates
         run: |
           git config --global user.name "github-actions[bot]"
