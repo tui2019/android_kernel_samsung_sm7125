@@ -41,6 +41,14 @@ jobs:
           if ! git merge-base --is-ancestor upstream/oneui/android16 HEAD; then
             echo "Upstream has new changes! Merging upstream/oneui/android16..."
             git merge upstream/oneui/android16 --no-edit -m "ci: sync upstream updates from AlfCraft07 [skip ci]"
+            # Drop upstream workflow-file updates from the sync merge when this
+            # run is using the default GITHUB_TOKEN, which cannot update
+            # .github/workflows/* without explicit workflows:write permission.
+            if git diff --name-only HEAD~1 HEAD | grep -q '^\.github/workflows/'; then
+              echo "Removing workflow file changes from sync merge to avoid token permission rejection"
+              git checkout HEAD~1 -- .github/workflows/
+              git commit --amend --no-edit
+            fi
             # NOTE: the default GITHUB_TOKEN (contents: write) cannot push changes
             # to .github/workflows/*.yml. If upstream touches workflow files, this
             # push will be rejected. Set the SYNC_PUSH_TOKEN secret to a fine-grained
