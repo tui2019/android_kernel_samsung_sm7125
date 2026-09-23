@@ -93,7 +93,7 @@ jobs:
           echo "=========================================="
           
           # Download and run KernelSU-Next legacy setup script
-          curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/legacy/kernel/setup.sh" | bash -s legacy
+          curl -LSs "https://raw.githubusercontent.com/AlfCraft07/KernelSU-Next/legacy/kernel/setup.sh" | bash -s legacy
           
           # --------------------------------------------------------------
           # Compatibility patches applied on top of the freshly-pulled,
@@ -308,16 +308,16 @@ jobs:
           ls -lah
           
           # Create ZIP
-          ZIPNAME="legion-gta4xlve-$(date +%Y%m%d).zip"
+          ZIPNAME="legion-gta4xlveu-$(date +%Y%m%d).zip"
           zip -r9 $GITHUB_WORKSPACE/$ZIPNAME *
           echo "✓ Created $ZIPNAME"
           echo "ZIPNAME=$ZIPNAME" >> $GITHUB_ENV
 
       - name: Upload Flashable ZIP
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: gta4xlve
           path: ${{ env.ZIPNAME }}
+          archive: false
 
       - name: Publish AnyKernel Release
         uses: softprops/action-gh-release@v2
@@ -348,7 +348,7 @@ jobs:
 
       - name: Upload Build Log (Debug)
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: build-log
           path: build.log
