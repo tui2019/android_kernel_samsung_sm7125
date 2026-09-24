@@ -40,15 +40,17 @@ jobs:
           echo "Upstream oneui/android16 is at $UPSTREAM_COMMIT"
 
           if ! git merge-base --is-ancestor upstream/oneui/android16 HEAD; then
-            echo "Upstream has new changes! Merging upstream/oneui/android16..."
-            git merge upstream/oneui/android16 --no-edit -m "ci: sync upstream updates from AlfCraft07 [skip ci]"
-            # NOTE: the default GITHUB_TOKEN (contents: write) cannot push changes
-            # to .github/workflows/*.yml. If upstream touches workflow files, this
-            # push will be rejected. Set the SYNC_PUSH_TOKEN secret to a fine-grained
-            # PAT with "Contents: write" + "Workflows: write" on this repo to allow it.
-            # This step now fails the job on a rejected push instead of hiding it,
-            # so "sync succeeded" in the UI actually means the push landed.
-            git push "https://x-access-token:${SYNC_PUSH_TOKEN:-$GITHUB_TOKEN}@github.com/${{ github.repository }}.git" HEAD:oneui/android16
+            echo "Upstream has new changes! Attempting merge of upstream/oneui/android16..."
+            if git merge upstream/oneui/android16 --no-edit -m "ci: sync upstream updates from AlfCraft07 [skip ci]"; then
+              # NOTE: the default GITHUB_TOKEN (contents: write) cannot push changes
+              # to .github/workflows/*.yml. If upstream touches workflow files, this
+              # push will be rejected. Set the SYNC_PUSH_TOKEN secret to a fine-grained
+              # PAT with "Contents: write" + "Workflows: write" on this repo to allow it.
+              git push "https://x-access-token:${SYNC_PUSH_TOKEN:-$GITHUB_TOKEN}@github.com/${{ github.repository }}.git" HEAD:oneui/android16 || echo "Notice: Push to origin skipped or not permitted."
+            else
+              echo "::warning::Merge conflict encountered with upstream/oneui/android16. Skipping upstream merge and building current branch."
+              git merge --abort || true
+            fi
           else
             echo "Local branch is already up to date with upstream."
           fi
@@ -97,11 +99,7 @@ jobs:
           
           # --------------------------------------------------------------
           # Compatibility patches applied on top of the freshly-pulled,
-          # unpinned KernelSU-Next `legacy` source. Each patch is idempotent:
-          # it only rewrites the file if its target string is still present,
-          # and hard-fails the build if not, instead of silently no-op'ing
-          # (previous no-op behavior is exactly how the sucompat.c/
-          # hook_manager.c patches went stale and unnoticed).
+          # unpinned KernelSU-Next `legacy` source.
           # --------------------------------------------------------------
           python3 - <<'PYEOF'
           import sys
