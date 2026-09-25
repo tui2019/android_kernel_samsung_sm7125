@@ -311,6 +311,11 @@ jobs:
           echo "✓ Created $ZIPNAME"
           echo "ZIPNAME=$ZIPNAME" >> $GITHUB_ENV
 
+          # Create static latest aliases for both WiFi (SM-P613) and LTE (SM-P619)
+          cp -f $GITHUB_WORKSPACE/$ZIPNAME $GITHUB_WORKSPACE/legion-gta4xlve-latest.zip
+          cp -f $GITHUB_WORKSPACE/$ZIPNAME $GITHUB_WORKSPACE/legion-gta4xlveu-latest.zip
+          cp -f $GITHUB_WORKSPACE/$ZIPNAME $GITHUB_WORKSPACE/legion-latest.zip
+
       - name: Upload Flashable ZIP
         uses: actions/upload-artifact@v7
         with:
@@ -325,9 +330,14 @@ jobs:
         with:
           tag_name: kernel-latest
           name: "GTA4XLVE AnyKernel3 Latest"
-          files: ${{ env.ZIPNAME }}
+          files: |
+            ${{ env.ZIPNAME }}
+            legion-gta4xlve-latest.zip
+            legion-gta4xlveu-latest.zip
+            legion-latest.zip
           draft: false
           prerelease: false
+          overwrite_files: true
 
       - name: Trigger QuantumROM Build
         if: success()
