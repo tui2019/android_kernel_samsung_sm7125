@@ -29,35 +29,6 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Check and Merge Upstream Updates
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git remote add upstream https://github.com/AlfCraft07/android_kernel_samsung_sm7125.git || true
-          git fetch upstream oneui/android16
-
-          UPSTREAM_COMMIT=$(git rev-parse upstream/oneui/android16)
-          echo "Upstream oneui/android16 is at $UPSTREAM_COMMIT"
-
-          if ! git merge-base --is-ancestor upstream/oneui/android16 HEAD; then
-            echo "Upstream has new changes! Attempting merge of upstream/oneui/android16..."
-            if git merge upstream/oneui/android16 --no-edit -m "ci: sync upstream updates from AlfCraft07 [skip ci]"; then
-              # NOTE: the default GITHUB_TOKEN (contents: write) cannot push changes
-              # to .github/workflows/*.yml. If upstream touches workflow files, this
-              # push will be rejected. Set the SYNC_PUSH_TOKEN secret to a fine-grained
-              # PAT with "Contents: write" + "Workflows: write" on this repo to allow it.
-              git push "https://x-access-token:${SYNC_PUSH_TOKEN:-$GITHUB_TOKEN}@github.com/${{ github.repository }}.git" HEAD:oneui/android16 || echo "Notice: Push to origin skipped or not permitted."
-            else
-              echo "::warning::Merge conflict encountered with upstream/oneui/android16. Skipping upstream merge and building current branch."
-              git merge --abort || true
-            fi
-          else
-            echo "Local branch is already up to date with upstream."
-          fi
-        env:
-          SYNC_PUSH_TOKEN: ${{ secrets.SYNC_PUSH_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
       # -----------------------------------------------------------------------
       # CACHING: Saves time by not re-downloading Clang every run
       # -----------------------------------------------------------------------
