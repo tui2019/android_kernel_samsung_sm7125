@@ -115,18 +115,6 @@ jobs:
                   f.write(content.replace(old, new))
               print(f"[{label}] applied to {path}")
 
-          # This vendor's 4.14.357 tree only exposes ktime_get_boottime_ts64()/
-          # get_monotonic_boottime64(); it does NOT define the plain
-          # get_monotonic_boottime() that KernelSU-Next's own
-          # "#if KERNEL_VERSION(4,19,0) <= LINUX_VERSION_CODE" check falls back
-          # to on pre-4.19-numbered kernels. Force the modern call unconditionally.
-          patch(
-              "KernelSU-Next/kernel/sulog/event.c",
-              "get_monotonic_boottime(&ts)",
-              "ktime_get_boottime_ts64(&ts)",
-              "event.c timespec64",
-          )
-
           # Fix KernelSU-Next selinux_hide so app processes don't crash:
           # selinuxfs expects filp->private_data to be `struct page *`, but
           # KernelSU-Next passes `page_address(data)` (kernel virtual address),
