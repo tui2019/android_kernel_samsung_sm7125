@@ -95,6 +95,17 @@ jobs:
               "#endif\nbool ksu_init_rc_hook __read_mostly = true;",
               "ksu_init_rc_hook definition",
           )
+
+          # Fix execveat sucompat flags parameter check:
+          # Upstream commit 8f77a401 incorrectly checked PT_REGS_SYSCALL_PARM4 (which is envp)
+          # instead of PT_REGS_PARM5 (flags). Since envp is non-null, this caused
+          # sucompat over execveat (used by modern Bionic on Android 15/16) to be bypassed.
+          patch(
+              "KernelSU-Next/kernel/feature/sucompat.c",
+              "(int)PT_REGS_SYSCALL_PARM4(regs) != 0",
+              "(int)PT_REGS_PARM5(regs) != 0",
+              "execveat flags parameter check",
+          )
           PYEOF
           
           echo "=========================================="
