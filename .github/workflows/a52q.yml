@@ -85,6 +85,16 @@ jobs:
               "filp->private_data = data;",
               "selinux_hide page pointer",
           )
+
+          # Fix undefined ksu_init_rc_hook in kprobes mode:
+          # Upstream commit 3c6dca5c added ksu_init_rc_hook checks to ksu_handle_sys_read
+          # and ksu_handle_vfs_read, but only declared it inside #else (non-kprobes mode).
+          patch(
+              "KernelSU-Next/kernel/runtime/ksud_integration.c",
+              "#else\nbool ksu_init_rc_hook __read_mostly = true;\n#endif",
+              "#endif\nbool ksu_init_rc_hook __read_mostly = true;",
+              "ksu_init_rc_hook definition",
+          )
           PYEOF
           
           echo "=========================================="
