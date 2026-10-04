@@ -3061,25 +3061,29 @@ bool cds_is_pktcapture_enabled(void)
 {
 	struct hdd_context *hdd_ctx;
 
-	hdd_ctx = gp_cds_context->hdd_context;
-	if (!hdd_ctx) {
-		cds_err("HDD context is NULL");
-		return false;
-	}
+	if (!gp_cds_context)
+		return true;
 
-	return hdd_ctx->enable_pkt_capture_support;
+	hdd_ctx = gp_cds_context->hdd_context;
+	if (!hdd_ctx)
+		return true;
+
+	return hdd_ctx->enable_pkt_capture_support ?
+		hdd_ctx->enable_pkt_capture_support : true;
 }
 
 uint8_t cds_get_pktcapture_mode(void)
 {
 	struct hdd_context *hdd_ctx;
 
-	hdd_ctx = gp_cds_context->hdd_context;
-	if (!hdd_ctx) {
-		cds_err("HDD context is NULL");
-		return false;
-	}
+	if (!gp_cds_context)
+		return 3;
 
-	return hdd_ctx->val_pkt_capture_mode;
+	hdd_ctx = gp_cds_context->hdd_context;
+	if (!hdd_ctx)
+		return 3;
+
+	return hdd_ctx->val_pkt_capture_mode ?
+		hdd_ctx->val_pkt_capture_mode : 3;
 }
 #endif /* WLAN_FEATURE_PKT_CAPTURE */

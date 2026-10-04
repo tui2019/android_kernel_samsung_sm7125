@@ -700,6 +700,35 @@ static const struct ieee80211_iface_limit
 	},
 };
 
+static const struct ieee80211_iface_limit
+	wlan_hdd_sta_mon_iface_limit[] = {
+	{
+		.max = 1,
+		.types = BIT(NL80211_IFTYPE_STATION),
+	},
+	{
+		.max = 1,
+		.types = BIT(NL80211_IFTYPE_MONITOR),
+	},
+};
+
+static const struct ieee80211_iface_limit
+	wlan_hdd_sta_p2p_mon_iface_limit[] = {
+	{
+		.max = 1,
+		.types = BIT(NL80211_IFTYPE_STATION),
+	},
+	{
+		.max = 2,
+		.types = BIT(NL80211_IFTYPE_P2P_CLIENT) |
+			 BIT(NL80211_IFTYPE_P2P_GO),
+	},
+	{
+		.max = 1,
+		.types = BIT(NL80211_IFTYPE_MONITOR),
+	},
+};
+
 static struct ieee80211_iface_combination
 	wlan_hdd_iface_combination[] = {
 	/* STA */
@@ -791,6 +820,20 @@ static struct ieee80211_iface_combination
 		.max_interfaces = 3,
 		.num_different_channels = 2,
 		.n_limits = ARRAY_SIZE(wlan_hdd_mon_iface_limit),
+	},
+	/* STA + Monitor */
+	{
+		.limits = wlan_hdd_sta_mon_iface_limit,
+		.num_different_channels = 2,
+		.max_interfaces = 2,
+		.n_limits = ARRAY_SIZE(wlan_hdd_sta_mon_iface_limit),
+	},
+	/* STA + P2P + Monitor */
+	{
+		.limits = wlan_hdd_sta_p2p_mon_iface_limit,
+		.num_different_channels = 2,
+		.max_interfaces = 4,
+		.n_limits = ARRAY_SIZE(wlan_hdd_sta_p2p_mon_iface_limit),
 	},
 };
 

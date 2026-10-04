@@ -1058,3 +1058,7 @@ CONFIG_FEATURE_GPIO_CFG := y
 
 #Enable VDEV Response wakelock feature
 CONFIG_FEATURE_VDEV_RSP_WAKELOCK := y
+
+#Enable Packet Capture support (for monitor mode / Mosey / AirDrop)
+CONFIG_WLAN_FEATURE_PKT_CAPTURE := y
+

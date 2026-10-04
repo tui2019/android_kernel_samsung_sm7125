@@ -11347,6 +11347,11 @@ static int hdd_context_init(struct hdd_context *hdd_ctx)
 	hdd_ctx->ioctl_scan_mode = eSIR_ACTIVE_SCAN;
 	hdd_ctx->max_intf_count = WLAN_MAX_VDEVS;
 
+#ifdef WLAN_FEATURE_PKT_CAPTURE
+	hdd_ctx->enable_pkt_capture_support = true;
+	hdd_ctx->val_pkt_capture_mode = 3;
+#endif
+
 	init_completion(&hdd_ctx->mc_sus_event_var);
 	init_completion(&hdd_ctx->ready_to_suspend);
 
@@ -17956,16 +17961,18 @@ wlan_hdd_add_monitor_check(struct hdd_context *hdd_ctx,
 						&num_open_session))
 		return -EINVAL;
 
-	if (num_open_session != 1) {
+	if (num_open_session > 1) {
 		hdd_err("cannot add monitor mode, due to %u sta interfaces",
 			num_open_session);
 		return -EINVAL;
 	}
 
-	sta_adapter = hdd_get_adapter(hdd_ctx, QDF_STA_MODE);
-	if (!sta_adapter) {
-		hdd_err("No station adapter");
-		return -EINVAL;
+	if (num_open_session == 1) {
+		sta_adapter = hdd_get_adapter(hdd_ctx, QDF_STA_MODE);
+		if (!sta_adapter) {
+			hdd_err("No station adapter");
+			return -EINVAL;
+		}
 	}
 
 	if (QDF_STATUS_SUCCESS != policy_mgr_mode_specific_num_open_sessions(

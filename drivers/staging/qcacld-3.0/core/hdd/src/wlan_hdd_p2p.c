@@ -676,6 +676,7 @@ struct wireless_dev *__wlan_hdd_add_virtual_intf(struct wiphy *wiphy,
 	case QDF_P2P_GO_MODE:
 	case QDF_P2P_CLIENT_MODE:
 	case QDF_STA_MODE:
+	case QDF_MONITOR_MODE:
 		break;
 	default:
 		mode = QDF_STA_MODE;
@@ -696,10 +697,15 @@ struct wireless_dev *__wlan_hdd_add_virtual_intf(struct wiphy *wiphy,
 	ret = wlan_hdd_add_monitor_check(hdd_ctx, &adapter, type, name,
 					 true, name_assign_type);
 	if (ret)
-		return ERR_PTR(-EINVAL);
+		return ERR_PTR(ret);
 	if (adapter) {
 		hdd_exit();
 		return adapter->dev->ieee80211_ptr;
+	}
+
+	if (type == NL80211_IFTYPE_MONITOR || mode == QDF_MONITOR_MODE) {
+		hdd_err("Failed to add monitor interface '%s'", name ? name : "");
+		return ERR_PTR(-EINVAL);
 	}
 
 	adapter = NULL;
