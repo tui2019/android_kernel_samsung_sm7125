@@ -17791,16 +17791,10 @@ wlan_hdd_add_monitor_check(struct hdd_context *hdd_ctx,
 		}
 	}
 
-	if (QDF_STATUS_SUCCESS != policy_mgr_mode_specific_num_open_sessions(
-						hdd_ctx->psoc,
-						QDF_SAP_MODE,
-						&num_open_session))
-		return -EINVAL;
-
-	if (num_open_session) {
-		hdd_err("cannot add monitor mode, due to SAP concurrency");
-		return -EINVAL;
-	}
+	/* Allow monitor mode concurrency even if dormant Samsung SAP interface (swlan0) is open */
+	policy_mgr_mode_specific_num_open_sessions(hdd_ctx->psoc,
+						   QDF_SAP_MODE,
+						   &num_open_session);
 
 	mon_adapter = hdd_open_adapter(hdd_ctx, QDF_MONITOR_MODE, name,
 				       wlan_hdd_get_intf_addr(

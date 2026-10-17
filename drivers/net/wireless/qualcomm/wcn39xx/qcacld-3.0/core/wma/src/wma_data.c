@@ -2758,6 +2758,10 @@ QDF_STATUS wma_tx_packet(void *wma_context, void *tx_frame, uint16_t frmLen,
 	} else if (pFc->subType == SIR_MAC_MGMT_ACTION ||
 			pFc->subType == SIR_MAC_MGMT_AUTH) {
 		chanfreq = channel_freq;
+		if (!chanfreq && wma_handle->interfaces[vdev_id].mhz)
+			chanfreq = wma_handle->interfaces[vdev_id].mhz;
+		else if (!chanfreq && wma_handle->interfaces[vdev_id].ch_freq)
+			chanfreq = wma_handle->interfaces[vdev_id].ch_freq;
 	} else {
 		chanfreq = 0;
 	}
@@ -2817,6 +2821,48 @@ QDF_STATUS wma_tx_packet(void *wma_context, void *tx_frame, uint16_t frmLen,
 		mac_addr = wh->i_addr2;
 		peer = wlan_objmgr_get_peer(psoc, pdev_id, mac_addr,
 					WLAN_MGMT_NB_ID);
+	}
+	if (!peer) {
+		struct wlan_objmgr_vdev *vdev;
+
+		vdev = wlan_objmgr_get_vdev_by_id_from_psoc(psoc, vdev_id,
+							    WLAN_MGMT_NB_ID);
+		if (vdev) {
+			mac_addr = wlan_vdev_mlme_get_macaddr(vdev);
+			peer = wlan_objmgr_get_peer(psoc, pdev_id, mac_addr,
+						    WLAN_MGMT_NB_ID);
+			if (!peer) {
+				peer = wlan_vdev_get_selfpeer(vdev);
+				if (peer)
+					wlan_objmgr_peer_get_ref(peer,
+								 WLAN_MGMT_NB_ID);
+			}
+			if (!peer) {
+				peer = wlan_vdev_get_bsspeer(vdev);
+				if (peer)
+					wlan_objmgr_peer_get_ref(peer,
+								 WLAN_MGMT_NB_ID);
+			}
+			wlan_objmgr_vdev_release_ref(vdev, WLAN_MGMT_NB_ID);
+		}
+	}
+	if (!peer && vdev_id != 0) {
+		struct wlan_objmgr_vdev *vdev0;
+
+		vdev0 = wlan_objmgr_get_vdev_by_id_from_psoc(psoc, 0,
+							     WLAN_MGMT_NB_ID);
+		if (vdev0) {
+			mac_addr = wlan_vdev_mlme_get_macaddr(vdev0);
+			peer = wlan_objmgr_get_peer(psoc, pdev_id, mac_addr,
+						    WLAN_MGMT_NB_ID);
+			if (!peer) {
+				peer = wlan_vdev_get_selfpeer(vdev0);
+				if (peer)
+					wlan_objmgr_peer_get_ref(peer,
+								 WLAN_MGMT_NB_ID);
+			}
+			wlan_objmgr_vdev_release_ref(vdev0, WLAN_MGMT_NB_ID);
+		}
 	}
 
 	status = wlan_mgmt_txrx_mgmt_frame_tx(peer, wma_handle->mac_context,
