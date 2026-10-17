@@ -2902,6 +2902,10 @@ QDF_STATUS wma_open(struct wlan_objmgr_psoc *psoc,
 
 	qdf_mem_zero(wma_handle, sizeof(t_wma_handle));
 
+#ifdef WLAN_FEATURE_PKT_CAPTURE
+	wma_handle->is_pktcapture_enabled = true;
+#endif
+
 	if (target_if_alloc_psoc_tgt_info(psoc)) {
 		WMA_LOGE("%s target psoc info allocation failed", __func__);
 		qdf_status = QDF_STATUS_E_NOMEM;

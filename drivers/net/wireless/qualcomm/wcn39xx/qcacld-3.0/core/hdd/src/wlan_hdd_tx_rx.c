@@ -1454,7 +1454,11 @@ static QDF_STATUS hdd_mon_rx_packet_cbk(void *context, qdf_nbuf_t rxbuf)
 	skb = (struct sk_buff *) rxbuf;
 	while (skb) {
 		skb_next = skb->next;
+		skb->next = NULL;
 		skb->dev = adapter->dev;
+		skb->pkt_type = PACKET_OTHERHOST;
+		skb->protocol = htons(ETH_P_802_2);
+		skb_reset_mac_header(skb);
 
 		++adapter->hdd_stats.tx_rx_stats.rx_packets[cpu_index];
 		++adapter->stats.rx_packets;

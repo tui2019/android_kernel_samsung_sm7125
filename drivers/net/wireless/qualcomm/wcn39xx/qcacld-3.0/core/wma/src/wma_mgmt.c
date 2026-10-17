@@ -61,7 +61,9 @@
 #include <cdp_txrx_cfg.h>
 #include <cdp_txrx_cmn.h>
 #include <cdp_txrx_misc.h>
-#include <cdp_txrx_misc.h>
+#ifdef WLAN_FEATURE_PKT_CAPTURE
+#include <cdp_txrx_mon.h>
+#endif /* WLAN_FEATURE_PKT_CAPTURE */
 #include "wlan_mgmt_txrx_tgt_api.h"
 #include "wlan_objmgr_psoc_obj.h"
 #include "wlan_objmgr_pdev_obj.h"
@@ -3731,6 +3733,17 @@ static int wma_mgmt_rx_process(void *handle, uint8_t *data,
 
 	wma_mem_endianness_based_copy(qdf_nbuf_data(wbuf),
 			bufp, mgmt_rx_params->buf_len);
+
+#ifdef WLAN_FEATURE_PKT_CAPTURE
+	if (cds_is_pktcapture_enabled()) {
+		void *soc = cds_get_context(QDF_MODULE_ID_SOC);
+		struct mon_rx_status rx_status = {0};
+
+		if (soc)
+			cdp_pktcapture_mgmtpkt_process(soc, OL_TXRX_PDEV_ID,
+						       &rx_status, wbuf, 0);
+	}
+#endif
 
 	psoc = (struct wlan_objmgr_psoc *)
 				wma_handle->psoc;

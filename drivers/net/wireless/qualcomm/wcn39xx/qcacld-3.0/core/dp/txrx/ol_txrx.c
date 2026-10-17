@@ -6447,11 +6447,46 @@ static struct cdp_raw_ops ol_ops_raw = {
 };
 
 #ifdef WLAN_FEATURE_PKT_CAPTURE
+static QDF_STATUS ol_txrx_pktcapture_mgmtpkt_process(
+					struct cdp_soc_t *soc,
+					uint8_t pdev_id,
+					struct mon_rx_status *txrx_status,
+					qdf_nbuf_t nbuf, uint8_t status)
+{
+	struct ol_txrx_pdev_t *pdev = ol_txrx_get_pdev_from_pdev_id(
+					cdp_soc_t_to_ol_txrx_soc_t(soc),
+					pdev_id);
+	qdf_nbuf_t mon_buf;
+	uint32_t frame_len;
+	uint8_t *data;
+
+	if (!pdev || !pdev->mon_cb || !pdev->mon_osif_dev || !nbuf)
+		return QDF_STATUS_E_INVAL;
+
+	frame_len = qdf_nbuf_len(nbuf);
+	if (!frame_len || frame_len > 4096)
+		return QDF_STATUS_E_INVAL;
+
+	mon_buf = qdf_nbuf_alloc(NULL, roundup(8 + frame_len, 4), 0, 4, false);
+	if (!mon_buf)
+		return QDF_STATUS_E_NOMEM;
+
+	qdf_nbuf_put_tail(mon_buf, 8 + frame_len);
+	data = qdf_nbuf_data(mon_buf);
+	qdf_mem_zero(data, 8);
+	data[2] = 8;
+	qdf_mem_copy(data + 8, qdf_nbuf_data(nbuf), frame_len);
+	qdf_nbuf_set_next(mon_buf, NULL);
+
+	return pdev->mon_cb(pdev->mon_osif_dev, mon_buf);
+}
+
 static struct cdp_pktcapture_ops ol_ops_pkt_capture = {
 	.txrx_pktcapture_cb_register = ol_txrx_register_pktcapture_cb,
 	.txrx_pktcapture_cb_deregister = ol_txrx_deregister_pktcapture_cb,
 	.txrx_pktcapture_set_mode = ol_txrx_set_pktcapture_mode,
 	.txrx_pktcapture_get_mode = ol_txrx_get_pktcapture_mode,
+	.txrx_pktcapture_mgmtpkt_process = ol_txrx_pktcapture_mgmtpkt_process,
 };
 #endif /* #ifdef WLAN_FEATURE_PKT_CAPTURE */
 

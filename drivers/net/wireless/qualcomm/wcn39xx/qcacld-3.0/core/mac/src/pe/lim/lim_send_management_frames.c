@@ -5354,34 +5354,37 @@ static void lim_tx_mgmt_frame(struct mac_context *mac_ctx, uint8_t vdev_id,
 	enum rateid min_rid = RATEID_DEFAULT;
 
 	session = pe_find_session_by_vdev_id(mac_ctx, vdev_id);
-	if (!session) {
-		cds_packet_free((void *)packet);
-		pe_err("session not found for given vdev_id %d",
-		       vdev_id);
-		return;
+	if (session) {
+		qdf_mtrace(QDF_MODULE_ID_PE, QDF_MODULE_ID_WMA,
+			   TRACE_CODE_TX_MGMT, session->peSessionId, 0);
+		min_rid = lim_get_min_session_txrate(session);
 	}
 
-	qdf_mtrace(QDF_MODULE_ID_PE, QDF_MODULE_ID_WMA, TRACE_CODE_TX_MGMT,
-		   session->peSessionId, 0);
-
-	mac_ctx->auth_ack_status = LIM_AUTH_ACK_NOT_RCD;
-	min_rid = lim_get_min_session_txrate(session);
+	if (fc->subType == SIR_MAC_MGMT_AUTH)
+		mac_ctx->auth_ack_status = LIM_AUTH_ACK_NOT_RCD;
 
 	qdf_status = wma_tx_frameWithTxComplete(mac_ctx, packet,
 					 (uint16_t)msg_len,
 					 TXRX_FRM_802_11_MGMT, ANI_TXDIR_TODS,
 					 7, lim_tx_complete, frame,
-					 lim_auth_tx_complete_cnf,
+					 (session &&
+					  fc->subType == SIR_MAC_MGMT_AUTH) ?
+					 lim_auth_tx_complete_cnf : NULL,
 					 0, vdev_id, false, 0, min_rid);
-	MTRACE(qdf_trace(QDF_MODULE_ID_PE, TRACE_CODE_TX_COMPLETE,
-		session->peSessionId, qdf_status));
+	if (session)
+		MTRACE(qdf_trace(QDF_MODULE_ID_PE, TRACE_CODE_TX_COMPLETE,
+			session->peSessionId, qdf_status));
 	if (!QDF_IS_STATUS_SUCCESS(qdf_status)) {
-		pe_err("*** Could not send Auth frame (subType: %d), retCode=%X ***",
+		pe_err("*** Could not send mgmt frame (subType: %d), retCode=%X ***",
 			fc->subType, qdf_status);
-		mac_ctx->auth_ack_status = LIM_AUTH_ACK_RCD_FAILURE;
-		auth_ack_status = SENT_FAIL;
-		lim_diag_event_report(mac_ctx, WLAN_PE_DIAG_AUTH_ACK_EVENT,
-				session, auth_ack_status, QDF_STATUS_E_FAILURE);
+		if (session && fc->subType == SIR_MAC_MGMT_AUTH) {
+			mac_ctx->auth_ack_status = LIM_AUTH_ACK_RCD_FAILURE;
+			auth_ack_status = SENT_FAIL;
+			lim_diag_event_report(mac_ctx,
+					      WLAN_PE_DIAG_AUTH_ACK_EVENT,
+					      session, auth_ack_status,
+					      QDF_STATUS_E_FAILURE);
+		}
 		/* Pkt will be freed up by the callback */
 	}
 }
