@@ -133,6 +133,7 @@
 #include "wlan_hdd_object_manager.h"
 #include "cds_utils.h"
 #include <cdp_txrx_handle.h>
+#include <cdp_txrx_mon.h>
 #include <qca_vendor.h>
 #include "wlan_pmo_ucfg_api.h"
 #include "sir_api.h"
@@ -2728,11 +2729,16 @@ static int __hdd_pktcapture_open(struct net_device *dev)
 	ret = hdd_set_pktcapture_cb(dev, OL_TXRX_PDEV_ID);
 
 	if (!ret) {
+		void *soc = cds_get_context(QDF_MODULE_ID_SOC);
+
 		set_bit(DEVICE_IFACE_OPENED, &adapter->event_flags);
 		wlan_hdd_netif_queue_control(adapter,
 					     WLAN_START_ALL_NETIF_QUEUE_N_CARRIER,
 					     WLAN_CONTROL_PATH);
 		netif_carrier_on(dev);
+		if (soc)
+			cdp_set_packet_capture_mode(soc, OL_TXRX_PDEV_ID,
+						    PKT_CAPTURE_MODE_DATA_MGMT);
 	}
 
 	return ret;

@@ -127,6 +127,11 @@
 #include "wlan_mlme_ucfg_api.h"
 #include "wlan_pmo_cfg.h"
 #include "cfg_ucfg_api.h"
+#include "wma_api.h"
+#include <cdp_txrx_mon.h>
+#include "wlan_p2p_public_struct.h"
+#include "wmi_unified_p2p_api.h"
+#include "init_deinit_lmac.h"
 
 #include "wlan_crypto_global_api.h"
 #include "wlan_nl_to_crypto_params.h"
@@ -14779,6 +14784,62 @@ static int wlan_hdd_cfg80211_extscan_get_valid_channels(
 
 static uint64_t g_google_roc_cookie = 0;
 
+static void wlan_hdd_google_apply_rx_filters(struct hdd_context *hdd_ctx,
+					     struct hdd_adapter *adapter,
+					     uint32_t freq, bool set)
+{
+	wmi_unified_t wmi_handle;
+	static const uint8_t awdl_bssid[6] = {0x00, 0x25, 0x00, 0xff, 0x94, 0x73};
+	static const uint8_t bcast_mac[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+	struct p2p_set_mac_filter param;
+	struct hdd_adapter *mon_adapter;
+
+	if (!hdd_ctx || !adapter)
+		return;
+
+	wmi_handle = lmac_get_wmi_unified_hdl(hdd_ctx->psoc);
+	if (!wmi_handle)
+		return;
+
+	/* 1. AWDL universal multicast / BSSID */
+	qdf_mem_zero(&param, sizeof(param));
+	param.vdev_id = adapter->vdev_id;
+	param.freq = freq;
+	param.set = set;
+	qdf_mem_copy(param.mac, awdl_bssid, 6);
+	wmi_send_set_mac_addr_rx_filter_cmd(wmi_handle, &param);
+
+	/* 2. Broadcast MAC */
+	qdf_mem_zero(&param, sizeof(param));
+	param.vdev_id = adapter->vdev_id;
+	param.freq = freq;
+	param.set = set;
+	qdf_mem_copy(param.mac, bcast_mac, 6);
+	wmi_send_set_mac_addr_rx_filter_cmd(wmi_handle, &param);
+
+	/* 3. STA Adapter MAC */
+	qdf_mem_zero(&param, sizeof(param));
+	param.vdev_id = adapter->vdev_id;
+	param.freq = freq;
+	param.set = set;
+	qdf_mem_copy(param.mac, adapter->mac_addr.bytes, 6);
+	wmi_send_set_mac_addr_rx_filter_cmd(wmi_handle, &param);
+
+	/* 4. Monitor adapter (wonder0) MAC if available */
+	mon_adapter = hdd_get_adapter(hdd_ctx, QDF_MONITOR_MODE);
+	if (mon_adapter) {
+		qdf_mem_zero(&param, sizeof(param));
+		param.vdev_id = adapter->vdev_id;
+		param.freq = freq;
+		param.set = set;
+		qdf_mem_copy(param.mac, mon_adapter->mac_addr.bytes, 6);
+		wmi_send_set_mac_addr_rx_filter_cmd(wmi_handle, &param);
+	}
+
+	hdd_info("Google vendor: RX MAC filters %s for %u MHz on vdev %d",
+		 set ? "REGISTERED" : "CLEARED", freq, adapter->vdev_id);
+}
+
 static int wlan_hdd_google_set_frequency(struct wiphy *wiphy,
 					 struct wireless_dev *wdev,
 					 const void *data, int data_len)
@@ -14814,6 +14875,7 @@ static int wlan_hdd_google_set_frequency(struct wiphy *wiphy,
 			g_google_roc_cookie = 0;
 			hdd_info("Google vendor canceled remain_on_channel");
 		}
+		wlan_hdd_google_apply_rx_filters(hdd_ctx, adapter, 5745, false);
 		return 0;
 	}
 
@@ -14828,6 +14890,65 @@ static int wlan_hdd_google_set_frequency(struct wiphy *wiphy,
 						    chan, 3600000, &g_google_roc_cookie);
 		hdd_info("Google vendor remain_on_channel started for %u MHz, cookie 0x%llx",
 			 freq, g_google_roc_cookie);
+
+		/* 1. Configure firmware packet capture mode on STA vdev */
+		wma_cli_set_command(adapter->vdev_id,
+				    WMI_VDEV_PARAM_PACKET_CAPTURE_MODE,
+				    PKT_CAPTURE_MODE_DATA_MGMT, VDEV_CMD);
+
+		/* 2. Configure firmware promiscuous mode on PDEV */
+		wma_cli_set_command(0,
+				    WMI_PDEV_PARAM_SET_PROMISC_MODE_CMDID,
+				    1, PDEV_CMD);
+
+		/* 3. Configure host datapath packet capture mode */
+		cdp_set_packet_capture_mode(cds_get_context(QDF_MODULE_ID_SOC),
+					    OL_TXRX_PDEV_ID,
+					    PKT_CAPTURE_MODE_DATA_MGMT);
+
+		/* 4. Configure firmware RX MAC filter for AWDL / Bcast / STA / Monitor */
+		wlan_hdd_google_apply_rx_filters(hdd_ctx, adapter, freq, true);
+	}
+
+	return 0;
+}
+
+static int wlan_hdd_google_set_filter(struct wiphy *wiphy,
+				      struct wireless_dev *wdev,
+				      const void *data, int data_len)
+{
+	struct hdd_context *hdd_ctx = wiphy_priv(wiphy);
+	struct hdd_adapter *adapter;
+	wmi_unified_t wmi_handle;
+	uint8_t filter_mac[ETH_ALEN];
+	struct p2p_set_mac_filter param;
+
+	hdd_info("Google vendor set_filter called: data_len %d", data_len);
+
+	adapter = hdd_get_adapter(hdd_ctx, QDF_STA_MODE);
+	if (!adapter)
+		adapter = hdd_get_adapter(hdd_ctx, QDF_NDI_MODE);
+	if (!adapter)
+		return 0;
+
+	wmi_handle = lmac_get_wmi_unified_hdl(hdd_ctx->psoc);
+	if (!wmi_handle)
+		return 0;
+
+	if (data && data_len >= ETH_ALEN) {
+		if (data_len >= ETH_ALEN + 4 && ((const uint8_t *)data)[2] == ETH_ALEN) {
+			memcpy(filter_mac, (const uint8_t *)data + 4, ETH_ALEN);
+		} else {
+			memcpy(filter_mac, data, ETH_ALEN);
+		}
+		hdd_info("Google vendor set_filter: registering " QDF_MAC_ADDR_STR,
+			 QDF_MAC_ADDR_ARRAY(filter_mac));
+		qdf_mem_zero(&param, sizeof(param));
+		param.vdev_id = adapter->vdev_id;
+		param.freq = 5745;
+		param.set = true;
+		qdf_mem_copy(param.mac, filter_mac, ETH_ALEN);
+		wmi_send_set_mac_addr_rx_filter_cmd(wmi_handle, &param);
 	}
 
 	return 0;
@@ -14880,7 +15001,7 @@ const struct wiphy_vendor_command hdd_wiphy_vendor_commands[] = {
 		.info.vendor_id = GOOGLE_NL80211_VENDOR_ID,
 		.info.subcmd = 2,
 		.flags = 0,
-		.doit = wlan_hdd_google_noop
+		.doit = wlan_hdd_google_set_filter
 	},
 	{
 		.info.vendor_id = GOOGLE_NL80211_VENDOR_ID,
