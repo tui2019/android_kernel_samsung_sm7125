@@ -14792,7 +14792,7 @@ static int wlan_hdd_google_set_frequency(struct wiphy *wiphy,
 	struct ieee80211_channel *chan;
 
 	if (data && data_len > 0) {
-		if (!nla_parse(tb, 1, data, data_len, policy, NULL)) {
+		if (!wlan_cfg80211_nla_parse(tb, 1, data, data_len, policy)) {
 			if (tb[1])
 				freq = nla_get_u32(tb[1]);
 		}

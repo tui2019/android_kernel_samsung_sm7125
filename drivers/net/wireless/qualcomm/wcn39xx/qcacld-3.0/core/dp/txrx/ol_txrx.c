@@ -21,6 +21,7 @@
 /* header files for OS primitives */
 #include <osdep.h>              /* uint32_t, etc. */
 #include <qdf_mem.h>         /* qdf_mem_malloc,free */
+#include <qdf_nbuf.h>
 #include <qdf_types.h>          /* qdf_device_t, qdf_print */
 #include <qdf_lock.h>           /* qdf_spinlock */
 #include <qdf_atomic.h>         /* qdf_atomic_read */
