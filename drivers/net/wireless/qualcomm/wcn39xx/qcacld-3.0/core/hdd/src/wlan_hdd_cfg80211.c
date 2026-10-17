@@ -14777,6 +14777,8 @@ static int wlan_hdd_cfg80211_extscan_get_valid_channels(
 
 #define GOOGLE_NL80211_VENDOR_ID 0x001A11
 
+static uint64_t g_google_roc_cookie = 0;
+
 static int wlan_hdd_google_set_frequency(struct wiphy *wiphy,
 					 struct wireless_dev *wdev,
 					 const void *data, int data_len)
@@ -14788,7 +14790,6 @@ static int wlan_hdd_google_set_frequency(struct wiphy *wiphy,
 	static const struct nla_policy policy[2] = {
 		[1] = { .type = NLA_U32 },
 	};
-	uint64_t cookie;
 	struct ieee80211_channel *chan;
 
 	if (data && data_len > 0) {
@@ -14806,10 +14807,27 @@ static int wlan_hdd_google_set_frequency(struct wiphy *wiphy,
 	if (!adapter)
 		return 0;
 
+	if (freq == 0) {
+		if (g_google_roc_cookie) {
+			wlan_hdd_cfg80211_cancel_remain_on_channel(wiphy, &adapter->wdev,
+								   g_google_roc_cookie);
+			g_google_roc_cookie = 0;
+			hdd_info("Google vendor canceled remain_on_channel");
+		}
+		return 0;
+	}
+
 	chan = ieee80211_get_channel(wiphy, freq);
 	if (chan) {
+		if (g_google_roc_cookie) {
+			wlan_hdd_cfg80211_cancel_remain_on_channel(wiphy, &adapter->wdev,
+								   g_google_roc_cookie);
+			g_google_roc_cookie = 0;
+		}
 		wlan_hdd_cfg80211_remain_on_channel(wiphy, &adapter->wdev,
-						    chan, 60000, &cookie);
+						    chan, 3600000, &g_google_roc_cookie);
+		hdd_info("Google vendor remain_on_channel started for %u MHz, cookie 0x%llx",
+			 freq, g_google_roc_cookie);
 	}
 
 	return 0;

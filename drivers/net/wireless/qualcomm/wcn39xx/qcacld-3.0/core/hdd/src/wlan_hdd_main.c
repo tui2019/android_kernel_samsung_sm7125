@@ -4954,7 +4954,7 @@ static netdev_tx_t hdd_mon_hard_start_xmit(struct sk_buff *skb,
 			if (!tx_adapter)
 				tx_adapter = hdd_get_adapter(hdd_ctx,
 							     QDF_NDI_MODE);
-			if (tx_adapter && frame_len <= 1500) {
+			if (tx_adapter && frame_len <= 2304) {
 				struct sir_mgmt_msg *msg;
 				uint16_t msg_len = sizeof(*msg) + frame_len;
 				struct scheduler_msg sch_msg = {0};

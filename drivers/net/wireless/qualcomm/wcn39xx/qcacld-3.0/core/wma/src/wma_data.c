@@ -2719,6 +2719,8 @@ QDF_STATUS wma_tx_packet(void *wma_context, void *tx_frame, uint16_t frmLen,
 			tx_frm_index =
 				GENERIC_NODOWNLD_NOACK_COMP_INDEX;
 		}
+	} else {
+		tx_frm_index = GENERIC_NODOWNLD_NOACK_COMP_INDEX;
 	}
 
 	/*
@@ -2745,25 +2747,37 @@ QDF_STATUS wma_tx_packet(void *wma_context, void *tx_frame, uint16_t frmLen,
 	if (tx_flag & HAL_USE_BD_RATE2_FOR_MANAGEMENT_FRAME)
 		use_6mbps = 1;
 
-	if (pFc->subType == SIR_MAC_MGMT_PROBE_RSP) {
-		if ((wma_is_vdev_in_ap_mode(wma_handle, vdev_id)) &&
-		    (0 != wma_handle->interfaces[vdev_id].mhz))
-			chanfreq = wma_handle->interfaces[vdev_id].mhz;
-		else
+	wh = (struct ieee80211_frame *)(qdf_nbuf_data(tx_frame));
+
+	{
+		static const uint8_t apple_awdl_bssid[6] = {0x00, 0x25, 0x00, 0xff, 0x94, 0x73};
+
+		if (!memcmp(wh->i_addr3, apple_awdl_bssid, 6) ||
+		    !memcmp(wh->i_addr1, apple_awdl_bssid, 6)) {
+			chanfreq = 5745;
+			is_5g = true;
+		} else if (pFc->subType == SIR_MAC_MGMT_PROBE_RSP) {
+			if ((wma_is_vdev_in_ap_mode(wma_handle, vdev_id)) &&
+			    (0 != wma_handle->interfaces[vdev_id].mhz))
+				chanfreq = wma_handle->interfaces[vdev_id].mhz;
+			else
+				chanfreq = channel_freq;
+			WMA_LOGD("%s: Probe response frame on channel %d vdev:%d",
+				__func__, chanfreq, vdev_id);
+			if (wma_is_vdev_in_ap_mode(wma_handle, vdev_id) && !chanfreq)
+				WMA_LOGE("%s: AP oper chan is zero", __func__);
+		} else if (pFc->subType == SIR_MAC_MGMT_ACTION ||
+				pFc->subType == SIR_MAC_MGMT_AUTH) {
 			chanfreq = channel_freq;
-		WMA_LOGD("%s: Probe response frame on channel %d vdev:%d",
-			__func__, chanfreq, vdev_id);
-		if (wma_is_vdev_in_ap_mode(wma_handle, vdev_id) && !chanfreq)
-			WMA_LOGE("%s: AP oper chan is zero", __func__);
-	} else if (pFc->subType == SIR_MAC_MGMT_ACTION ||
-			pFc->subType == SIR_MAC_MGMT_AUTH) {
-		chanfreq = channel_freq;
-		if (!chanfreq && wma_handle->interfaces[vdev_id].mhz)
-			chanfreq = wma_handle->interfaces[vdev_id].mhz;
-		else if (!chanfreq && wma_handle->interfaces[vdev_id].ch_freq)
-			chanfreq = wma_handle->interfaces[vdev_id].ch_freq;
-	} else {
-		chanfreq = 0;
+			if (!chanfreq && wma_handle->interfaces[vdev_id].mhz)
+				chanfreq = wma_handle->interfaces[vdev_id].mhz;
+			else if (!chanfreq && wma_handle->interfaces[vdev_id].ch_freq)
+				chanfreq = wma_handle->interfaces[vdev_id].ch_freq;
+			if (!chanfreq)
+				chanfreq = 5745;
+		} else {
+			chanfreq = 5745;
+		}
 	}
 
 	if (mac->mlme_cfg->gen.debug_packet_log & 0x1) {
@@ -2777,7 +2791,7 @@ QDF_STATUS wma_tx_packet(void *wma_context, void *tx_frame, uint16_t frmLen,
 		}
 	}
 
-	if (wlan_reg_is_5ghz_ch_freq(wma_handle->interfaces[vdev_id].ch_freq))
+	if (chanfreq >= 5000 || wlan_reg_is_5ghz_ch_freq(wma_handle->interfaces[vdev_id].ch_freq))
 		is_5g = true;
 
 	mgmt_param.tx_frame = tx_frame;
