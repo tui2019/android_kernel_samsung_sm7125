@@ -3739,6 +3739,9 @@ static int wma_mgmt_rx_process(void *handle, uint8_t *data,
 		void *soc = cds_get_context(QDF_MODULE_ID_SOC);
 		struct mon_rx_status rx_status = {0};
 
+		rx_status.chan_freq = (qdf_freq_t)mgmt_rx_params->chan_freq;
+		rx_status.rssi_comb = (int8_t)mgmt_rx_params->rssi;
+
 		if (soc)
 			cdp_pktcapture_mgmtpkt_process(soc, OL_TXRX_PDEV_ID,
 						       &rx_status, wbuf, 0);

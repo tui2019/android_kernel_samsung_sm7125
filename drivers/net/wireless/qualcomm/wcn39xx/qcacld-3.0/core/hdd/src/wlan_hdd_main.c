@@ -2727,8 +2727,13 @@ static int __hdd_pktcapture_open(struct net_device *dev)
 
 	ret = hdd_set_pktcapture_cb(dev, OL_TXRX_PDEV_ID);
 
-	if (!ret)
+	if (!ret) {
 		set_bit(DEVICE_IFACE_OPENED, &adapter->event_flags);
+		wlan_hdd_netif_queue_control(adapter,
+					     WLAN_START_ALL_NETIF_QUEUE_N_CARRIER,
+					     WLAN_CONTROL_PATH);
+		netif_carrier_on(dev);
+	}
 
 	return ret;
 }

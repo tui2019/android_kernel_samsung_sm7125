@@ -14775,7 +14775,113 @@ static int wlan_hdd_cfg80211_extscan_get_valid_channels(
 	return errno;
 }
 
+#define GOOGLE_NL80211_VENDOR_ID 0x001A11
+
+static int wlan_hdd_google_set_frequency(struct wiphy *wiphy,
+					 struct wireless_dev *wdev,
+					 const void *data, int data_len)
+{
+	struct hdd_context *hdd_ctx = wiphy_priv(wiphy);
+	struct hdd_adapter *adapter;
+	struct nlattr *tb[2];
+	uint32_t freq = 5745;
+	static const struct nla_policy policy[2] = {
+		[1] = { .type = NLA_U32 },
+	};
+	uint64_t cookie;
+	struct ieee80211_channel *chan;
+
+	if (data && data_len > 0) {
+		if (!nla_parse(tb, 1, data, data_len, policy, NULL)) {
+			if (tb[1])
+				freq = nla_get_u32(tb[1]);
+		}
+	}
+
+	hdd_info("Google vendor set_frequency: %u MHz", freq);
+
+	adapter = hdd_get_adapter(hdd_ctx, QDF_STA_MODE);
+	if (!adapter)
+		adapter = hdd_get_adapter(hdd_ctx, QDF_NDI_MODE);
+	if (!adapter)
+		return 0;
+
+	chan = ieee80211_get_channel(wiphy, freq);
+	if (chan) {
+		wlan_hdd_cfg80211_remain_on_channel(wiphy, &adapter->wdev,
+						    chan, 60000, &cookie);
+	}
+
+	return 0;
+}
+
+static int wlan_hdd_google_noop(struct wiphy *wiphy,
+				struct wireless_dev *wdev,
+				const void *data, int data_len)
+{
+	return 0;
+}
+
+static int wlan_hdd_google_get_mac_addr(struct wiphy *wiphy,
+					struct wireless_dev *wdev,
+					const void *data, int data_len)
+{
+	struct hdd_context *hdd_ctx = wiphy_priv(wiphy);
+	struct hdd_adapter *adapter = NULL;
+	struct sk_buff *skb;
+
+	if (wdev && wdev->netdev)
+		adapter = WLAN_HDD_GET_PRIV_PTR(wdev->netdev);
+	if (!adapter)
+		adapter = hdd_get_adapter(hdd_ctx, QDF_MONITOR_MODE);
+	if (!adapter)
+		adapter = hdd_get_adapter(hdd_ctx, QDF_STA_MODE);
+	if (!adapter)
+		return -EIO;
+
+	skb = cfg80211_vendor_cmd_alloc_reply_skb(wiphy, 64);
+	if (!skb)
+		return -ENOMEM;
+
+	if (nla_put(skb, 1, ETH_ALEN, adapter->mac_addr.bytes)) {
+		kfree_skb(skb);
+		return -EINVAL;
+	}
+
+	return cfg80211_vendor_cmd_reply(skb);
+}
+
 const struct wiphy_vendor_command hdd_wiphy_vendor_commands[] = {
+	{
+		.info.vendor_id = GOOGLE_NL80211_VENDOR_ID,
+		.info.subcmd = 1,
+		.flags = 0,
+		.doit = wlan_hdd_google_set_frequency
+	},
+	{
+		.info.vendor_id = GOOGLE_NL80211_VENDOR_ID,
+		.info.subcmd = 2,
+		.flags = 0,
+		.doit = wlan_hdd_google_noop
+	},
+	{
+		.info.vendor_id = GOOGLE_NL80211_VENDOR_ID,
+		.info.subcmd = 3,
+		.flags = 0,
+		.doit = wlan_hdd_google_noop
+	},
+	{
+		.info.vendor_id = GOOGLE_NL80211_VENDOR_ID,
+		.info.subcmd = 4,
+		.flags = 0,
+		.doit = wlan_hdd_google_noop
+	},
+	{
+		.info.vendor_id = GOOGLE_NL80211_VENDOR_ID,
+		.info.subcmd = 5,
+		.flags = 0,
+		.doit = wlan_hdd_google_get_mac_addr
+	},
 	{
 		.info.vendor_id = QCA_NL80211_VENDOR_ID,
 		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_DFS_CAPABILITY,

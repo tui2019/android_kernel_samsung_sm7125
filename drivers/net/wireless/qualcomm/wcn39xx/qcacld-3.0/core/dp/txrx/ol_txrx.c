@@ -6459,6 +6459,8 @@ static QDF_STATUS ol_txrx_pktcapture_mgmtpkt_process(
 	qdf_nbuf_t mon_buf;
 	uint32_t frame_len;
 	uint8_t *data;
+	uint16_t freq = 5745;
+	int8_t rssi = -40;
 
 	if (!pdev || !pdev->mon_cb || !pdev->mon_osif_dev || !nbuf)
 		return QDF_STATUS_E_INVAL;
@@ -6467,15 +6469,33 @@ static QDF_STATUS ol_txrx_pktcapture_mgmtpkt_process(
 	if (!frame_len || frame_len > 4096)
 		return QDF_STATUS_E_INVAL;
 
-	mon_buf = qdf_nbuf_alloc(NULL, roundup(8 + frame_len, 4), 0, 4, false);
+	if (txrx_status) {
+		if (txrx_status->chan_freq)
+			freq = (uint16_t)txrx_status->chan_freq;
+		if (txrx_status->rssi_comb)
+			rssi = txrx_status->rssi_comb;
+	}
+
+	mon_buf = qdf_nbuf_alloc(NULL, roundup(16 + frame_len, 4), 0, 4, false);
 	if (!mon_buf)
 		return QDF_STATUS_E_NOMEM;
 
-	qdf_nbuf_put_tail(mon_buf, 8 + frame_len);
+	qdf_nbuf_put_tail(mon_buf, 16 + frame_len);
 	data = qdf_nbuf_data(mon_buf);
-	qdf_mem_zero(data, 8);
-	data[2] = 8;
-	qdf_mem_copy(data + 8, qdf_nbuf_data(nbuf), frame_len);
+	qdf_mem_zero(data, 16);
+	data[2] = 16;
+	data[4] = 0x28; /* IEEE80211_RADIOTAP_CHANNEL | IEEE80211_RADIOTAP_DBM_ANTSIGNAL */
+	data[8] = (uint8_t)(freq & 0xff);
+	data[9] = (uint8_t)((freq >> 8) & 0xff);
+	if (freq > 5000) {
+		data[10] = 0x40; /* 5GHz */
+		data[11] = 0x01;
+	} else {
+		data[10] = 0xa0; /* 2.4GHz */
+		data[11] = 0x00;
+	}
+	data[12] = (uint8_t)rssi;
+	qdf_mem_copy(data + 16, qdf_nbuf_data(nbuf), frame_len);
 	qdf_nbuf_set_next(mon_buf, NULL);
 
 	return pdev->mon_cb(pdev->mon_osif_dev, mon_buf);
