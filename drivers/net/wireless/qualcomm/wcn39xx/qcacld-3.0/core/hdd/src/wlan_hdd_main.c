@@ -2739,6 +2739,22 @@ static int __hdd_pktcapture_open(struct net_device *dev)
 		if (soc)
 			cdp_set_packet_capture_mode(soc, OL_TXRX_PDEV_ID,
 						    PKT_CAPTURE_MODE_DATA_MGMT);
+
+#ifdef FEATURE_MONITOR_MODE_SUPPORT
+		if (g_google_target_freq != 0 && hdd_ctx->wiphy) {
+			struct ieee80211_channel *chan =
+				ieee80211_get_channel(hdd_ctx->wiphy, g_google_target_freq);
+			if (chan) {
+				struct cfg80211_chan_def chandef = {0};
+				chandef.chan = chan;
+				chandef.width = NL80211_CHAN_WIDTH_20;
+				chandef.center_freq1 = g_google_target_freq;
+				hdd_info("Configuring %s channel to %u MHz upon interface open",
+					 dev->name, g_google_target_freq);
+				wlan_hdd_cfg80211_set_mon_ch(hdd_ctx->wiphy, &chandef);
+			}
+		}
+#endif
 	}
 
 	return ret;

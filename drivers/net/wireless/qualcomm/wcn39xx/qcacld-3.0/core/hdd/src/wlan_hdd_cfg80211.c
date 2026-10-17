@@ -14783,6 +14783,15 @@ static int wlan_hdd_cfg80211_extscan_get_valid_channels(
 #define GOOGLE_NL80211_VENDOR_ID 0x001A11
 
 static uint64_t g_google_roc_cookie = 0;
+bool g_google_roc_active = false;
+EXPORT_SYMBOL(g_google_roc_active);
+uint32_t g_google_target_freq = 0;
+EXPORT_SYMBOL(g_google_target_freq);
+
+#ifdef FEATURE_MONITOR_MODE_SUPPORT
+int wlan_hdd_cfg80211_set_mon_ch(struct wiphy *wiphy,
+				struct cfg80211_chan_def *chandef);
+#endif
 
 static void wlan_hdd_google_apply_rx_filters(struct hdd_context *hdd_ctx,
 					     struct hdd_adapter *adapter,
@@ -14869,6 +14878,8 @@ static int wlan_hdd_google_set_frequency(struct wiphy *wiphy,
 		return 0;
 
 	if (freq == 0) {
+		g_google_roc_active = false;
+		g_google_target_freq = 0;
 		if (g_google_roc_cookie) {
 			wlan_hdd_cfg80211_cancel_remain_on_channel(wiphy, &adapter->wdev,
 								   g_google_roc_cookie);
@@ -14881,6 +14892,25 @@ static int wlan_hdd_google_set_frequency(struct wiphy *wiphy,
 
 	chan = ieee80211_get_channel(wiphy, freq);
 	if (chan) {
+		struct hdd_adapter *mon_adapter = hdd_get_adapter(hdd_ctx, QDF_MONITOR_MODE);
+
+		g_google_roc_active = true;
+		g_google_target_freq = freq;
+
+#ifdef FEATURE_MONITOR_MODE_SUPPORT
+		/* 1. Persistently lock monitor interface channel via SME */
+		if (mon_adapter) {
+			struct cfg80211_chan_def chandef = {0};
+			chandef.chan = chan;
+			chandef.width = NL80211_CHAN_WIDTH_20;
+			chandef.center_freq1 = freq;
+			hdd_info("Google vendor setting monitor channel to %u MHz on %s",
+				 freq, mon_adapter->dev->name);
+			wlan_hdd_cfg80211_set_mon_ch(wiphy, &chandef);
+		}
+#endif
+
+		/* 2. Start remain_on_channel */
 		if (g_google_roc_cookie) {
 			wlan_hdd_cfg80211_cancel_remain_on_channel(wiphy, &adapter->wdev,
 								   g_google_roc_cookie);
@@ -14891,22 +14921,22 @@ static int wlan_hdd_google_set_frequency(struct wiphy *wiphy,
 		hdd_info("Google vendor remain_on_channel started for %u MHz, cookie 0x%llx",
 			 freq, g_google_roc_cookie);
 
-		/* 1. Configure firmware packet capture mode on STA vdev */
+		/* 3. Configure firmware packet capture mode on STA vdev */
 		wma_cli_set_command(adapter->vdev_id,
 				    WMI_VDEV_PARAM_PACKET_CAPTURE_MODE,
 				    PKT_CAPTURE_MODE_DATA_MGMT, VDEV_CMD);
 
-		/* 2. Configure firmware promiscuous mode on PDEV */
+		/* 4. Configure firmware promiscuous mode on PDEV */
 		wma_cli_set_command(0,
 				    WMI_PDEV_PARAM_SET_PROMISC_MODE_CMDID,
 				    1, PDEV_CMD);
 
-		/* 3. Configure host datapath packet capture mode */
+		/* 5. Configure host datapath packet capture mode */
 		cdp_set_packet_capture_mode(cds_get_context(QDF_MODULE_ID_SOC),
 					    OL_TXRX_PDEV_ID,
 					    PKT_CAPTURE_MODE_DATA_MGMT);
 
-		/* 4. Configure firmware RX MAC filter for AWDL / Bcast / STA / Monitor */
+		/* 6. Configure firmware RX MAC filter for AWDL / Bcast / STA / Monitor */
 		wlan_hdd_google_apply_rx_filters(hdd_ctx, adapter, freq, true);
 	}
 
@@ -14935,20 +14965,50 @@ static int wlan_hdd_google_set_filter(struct wiphy *wiphy,
 	if (!wmi_handle)
 		return 0;
 
-	if (data && data_len >= ETH_ALEN) {
-		if (data_len >= ETH_ALEN + 4 && ((const uint8_t *)data)[2] == ETH_ALEN) {
-			memcpy(filter_mac, (const uint8_t *)data + 4, ETH_ALEN);
-		} else {
-			memcpy(filter_mac, data, ETH_ALEN);
+	if (data && data_len > 0) {
+		struct nlattr *nla;
+		int rem = data_len;
+		char hexbuf[128] = {0};
+		int hexlen = min(data_len, 32);
+		int i;
+
+		for (i = 0; i < hexlen; i++)
+			snprintf(hexbuf + i*3, 4, "%02x ", ((const uint8_t *)data)[i]);
+		hdd_info("Google vendor set_filter hex: %s", hexbuf);
+
+		for (nla = (struct nlattr *)data; nla_ok(nla, rem); nla = nla_next(nla, &rem)) {
+			hdd_info("Google vendor set_filter attr: type %d, len %d",
+				 nla_type(nla), nla_len(nla));
+			if (nla_len(nla) == ETH_ALEN) {
+				memcpy(filter_mac, nla_data(nla), ETH_ALEN);
+				hdd_info("Google vendor set_filter: registering attribute MAC " QDF_MAC_ADDR_STR,
+					 QDF_MAC_ADDR_ARRAY(filter_mac));
+				qdf_mem_zero(&param, sizeof(param));
+				param.vdev_id = adapter->vdev_id;
+				param.freq = 5745;
+				param.set = true;
+				qdf_mem_copy(param.mac, filter_mac, ETH_ALEN);
+				wmi_send_set_mac_addr_rx_filter_cmd(wmi_handle, &param);
+			}
 		}
-		hdd_info("Google vendor set_filter: registering " QDF_MAC_ADDR_STR,
-			 QDF_MAC_ADDR_ARRAY(filter_mac));
-		qdf_mem_zero(&param, sizeof(param));
-		param.vdev_id = adapter->vdev_id;
-		param.freq = 5745;
-		param.set = true;
-		qdf_mem_copy(param.mac, filter_mac, ETH_ALEN);
-		wmi_send_set_mac_addr_rx_filter_cmd(wmi_handle, &param);
+
+		if (data_len >= ETH_ALEN) {
+			if (data_len >= ETH_ALEN + 4 && ((const uint8_t *)data)[2] == ETH_ALEN)
+				memcpy(filter_mac, (const uint8_t *)data + 4, ETH_ALEN);
+			else
+				memcpy(filter_mac, data, ETH_ALEN);
+
+			if (filter_mac[0] != 0x08) {
+				hdd_info("Google vendor set_filter: registering raw MAC " QDF_MAC_ADDR_STR,
+					 QDF_MAC_ADDR_ARRAY(filter_mac));
+				qdf_mem_zero(&param, sizeof(param));
+				param.vdev_id = adapter->vdev_id;
+				param.freq = 5745;
+				param.set = true;
+				qdf_mem_copy(param.mac, filter_mac, ETH_ALEN);
+				wmi_send_set_mac_addr_rx_filter_cmd(wmi_handle, &param);
+			}
+		}
 	}
 
 	return 0;
@@ -23892,7 +23952,7 @@ static int __wlan_hdd_cfg80211_set_mon_ch(struct wiphy *wiphy,
  *
  * Return: 0 success or error code on failure.
  */
-static int wlan_hdd_cfg80211_set_mon_ch(struct wiphy *wiphy,
+int wlan_hdd_cfg80211_set_mon_ch(struct wiphy *wiphy,
 				       struct cfg80211_chan_def *chandef)
 {
 	struct osif_psoc_sync *psoc_sync;

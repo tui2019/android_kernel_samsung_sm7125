@@ -316,9 +316,13 @@ QDF_STATUS tgt_p2p_mgmt_frame_rx_cb(struct wlan_objmgr_psoc *psoc,
 
 	if (!peer) {
 		if (p2p_soc_obj->cur_roc_vdev_id == P2P_INVALID_VDEV_ID) {
-			p2p_err("vdev id of current roc invalid");
-			qdf_nbuf_free(buf);
-			return QDF_STATUS_E_FAILURE;
+			if (g_google_roc_active) {
+				vdev_id = 0;
+			} else {
+				p2p_err("vdev id of current roc invalid");
+				qdf_nbuf_free(buf);
+				return QDF_STATUS_E_FAILURE;
+			}
 		} else {
 			vdev_id = p2p_soc_obj->cur_roc_vdev_id;
 		}

@@ -720,4 +720,9 @@ QDF_STATUS wlan_hdd_send_sta_authorized_event(
  */
 bool hdd_is_legacy_connection(struct hdd_adapter *adapter);
 
+extern bool g_google_roc_active;
+extern uint32_t g_google_target_freq;
+int wlan_hdd_cfg80211_set_mon_ch(struct wiphy *wiphy,
+				struct cfg80211_chan_def *chandef);
+
 #endif

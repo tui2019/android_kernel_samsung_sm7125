@@ -40,6 +40,9 @@
 struct wlan_objmgr_vdev;
 struct scan_event;
 
+extern bool g_google_roc_active;
+extern uint32_t g_google_target_freq;
+
 /**
  * enum roc_type - user requested or off channel tx
  * @USER_REQUESTED:   Requested by supplicant

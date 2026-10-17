@@ -132,7 +132,7 @@ static QDF_STATUS p2p_scan_start(struct p2p_roc_context *roc_ctx)
 		/* this is to protect too huge value if some customers
 		 * give a higher value from supplicant
 		 */
-		if (req->scan_req.dwell_time_passive > P2P_MAX_ROC_DURATION)
+		if (req->scan_req.dwell_time_passive > P2P_MAX_ROC_DURATION && !g_google_roc_active)
 			req->scan_req.dwell_time_passive = P2P_MAX_ROC_DURATION;
 	}
 	p2p_debug("FW requested roc duration is:%d",
@@ -349,6 +349,11 @@ static void p2p_roc_timeout(void *pdata)
 		roc_ctx->phy_mode, roc_ctx->duration,
 		roc_ctx->roc_type, roc_ctx->roc_state);
 
+	if (g_google_roc_active) {
+		p2p_info("Google vendor ROC active: ignoring roc timeout");
+		return;
+	}
+
 	if (roc_ctx->roc_state == ROC_STATE_CANCEL_IN_PROG) {
 		p2p_err("Cancellation already in progress");
 		return;
@@ -532,10 +537,15 @@ static QDF_STATUS p2p_process_scan_complete_evt(
 	if (status != QDF_STATUS_SUCCESS)
 		p2p_err("Failed to destroy roc timer");
 
-	status = p2p_mgmt_rx_ops(p2p_soc_obj->soc, false);
-	p2p_soc_obj->cur_roc_vdev_id = P2P_INVALID_VDEV_ID;
-	if (status != QDF_STATUS_SUCCESS)
-		p2p_err("Failed to deregister mgmt rx callback");
+	if (!g_google_roc_active) {
+		status = p2p_mgmt_rx_ops(p2p_soc_obj->soc, false);
+		p2p_soc_obj->cur_roc_vdev_id = P2P_INVALID_VDEV_ID;
+		if (status != QDF_STATUS_SUCCESS)
+			p2p_err("Failed to deregister mgmt rx callback");
+	} else {
+		p2p_info("Google vendor ROC active: keeping mgmt_rx_ops registered on vdev %d",
+			 p2p_soc_obj->cur_roc_vdev_id);
+	}
 
 	if (roc_ctx->roc_type == USER_REQUESTED)
 		status = p2p_send_roc_event(roc_ctx,
